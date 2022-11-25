@@ -63,11 +63,45 @@ async function run() {
             if (decoded.email === email) {
                 const users = await UserList.find({}).toArray()
                 const buyers = users.filter(user => user.userType === 'buyer');
-                console.log(buyers);
+                // console.log(buyers);
                 return (res.send(buyers))
             }
             res.status(403).send({ message: 'Forbidden' })
 
+        })
+        app.get('/allsellers',verifyJWT,async (req,res) => {
+            const email = req.query.email;
+            const decoded = req.decoded;
+            if (decoded.email === email) {
+                const users = await UserList.find({}).toArray()
+                const buyers = users.filter(user => user.userType === 'seller');
+                // console.log(buyers);
+                return (res.send(buyers))
+            }
+            res.status(403).send({ message: 'Forbidden' })
+
+        })
+        app.delete('/allbuyers/:id',async (req,res) => {
+            const id = req.params.id;
+
+            const query = { _id: ObjectId(id) };
+            const result = await UserList.deleteOne(query);
+            res.send(result);
+        })
+        app.delete('/allselllers/:id',async (req,res) => {
+            const id = req.params.id;
+
+            const query = { _id: ObjectId(id) };
+            const result = await UserList.deleteOne(query);
+            res.send(result);
+        })
+        app.patch('/allselllers/:id',async (req,res) => {
+            const id = req.params.id;
+
+            const query = { _id: ObjectId(id) };
+            const update = { $set: { verified: true } };
+            const result = await UserList.updateOne(query,update);
+            res.send(result);
         })
 
     } finally {
