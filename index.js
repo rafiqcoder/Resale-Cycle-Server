@@ -31,9 +31,33 @@ const verifyJWT = (req,res,next) => {
 async function run() {
 
     const UserList = client.db('ResaleCycle').collection('userList');
+    const Categories = client.db('ResaleCycle').collection('categories');
+    const Products = client.db('ResaleCycle').collection('products');
 
     try {
 
+        app.post('/add-category',async (req,res) => {
+            const data = req.body;
+
+            // console.log(user.email);
+            const result = await Categories.insertOne(data);
+
+            return res.send(result);
+
+        });
+        app.post('/add-Product',async (req,res) => {
+            const product = req.body;
+
+            // console.log(user.email);
+
+
+
+            const result = await Products.insertOne(product);
+
+            return res.send(result);
+            // console.log(result);
+
+        });
         app.post('/users',async (req,res) => {
             const user = req.body;
             console.log(user);
@@ -67,6 +91,48 @@ async function run() {
                 return (res.send(buyers))
             }
             res.status(403).send({ message: 'Forbidden' })
+        })
+        app.get('/veloce',async (req,res) => {
+            const email = req.query.email;
+
+            const products = await Products.find({}).toArray()
+            const veloceProducts = products.filter(product => product.category === 'veloce');
+
+            res.send(veloceProducts)
+        })
+        app.get('/:name/:id',async (req,res) => {
+            const id = req.params.id;
+            const name = req.params.name;
+            const query = { _id: ObjectId(id) };
+
+            const categories = await Categories.find({}).toArray();
+            const category = categories.find(category => category.categoryName === name);
+           
+           
+
+
+            const products = await Products.find({}).toArray()
+            const catProducts = products.filter(product => product.category === name);
+            res.send({
+                products: catProducts,
+                category: category
+            })
+            // console.log(catProducts);
+        })
+
+        app.get('/all-categories',async (req,res) => {
+
+            const categories = await Categories.find({}).toArray()
+            res.send(categories)
+        })
+
+        app.get('/allusers',async (req,res) => {
+            const email = req.query.email;
+
+            const users = await UserList.find({}).toArray()
+
+            res.send(users)
+
 
         })
         app.get('/allsellers',verifyJWT,async (req,res) => {
