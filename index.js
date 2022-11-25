@@ -12,6 +12,22 @@ app.use(cors());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.1rvc7ql.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri,{ useNewUrlParser: true,useUnifiedTopology: true,serverApi: ServerApiVersion.v1 });
+
+const verifyJWT = (req,res,next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return res.status(401).send({ message: 'Unauthorize Access' })
+    }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token,process.env.ACCESS_SECRET_TOKEN,function (err,decoded) {
+        if (err) {
+            res.status(403).send({ message: "Forbidden Access" })
+        }
+        req.decoded = decoded;
+        next();
+    })
+}
+
 async function run() {
 
     const UserList = client.db('ResaleCycle').collection('userList');
@@ -41,6 +57,18 @@ async function run() {
                 return res.send({ accessToken: token });
             }
         });
+        app.get('/allbuyers',verifyJWT,async (req,res) => {
+            const email = req.query.email;
+            const decoded = req.decoded;
+            if (decoded.email === email) {
+                const users = await UserList.find({}).toArray()
+                const buyers = users.filter(user => user.userType === 'buyer');
+                console.log(buyers);
+                return (res.send(buyers))
+            }
+            res.status(403).send({ message: 'Forbidden' })
+
+        })
 
     } finally {
 
