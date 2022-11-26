@@ -33,29 +33,72 @@ async function run() {
     const UserList = client.db('ResaleCycle').collection('userList');
     const Categories = client.db('ResaleCycle').collection('categories');
     const Products = client.db('ResaleCycle').collection('products');
+    const AdvertisedProducts = client.db('ResaleCycle').collection('advertised');
+    const Bookings = client.db('ResaleCycle').collection('bookings');
+    const ReportedItems = client.db('ResaleCycle').collection('reportedItems');
 
     try {
 
-        app.post('/add-category',async (req,res) => {
+        app.post('/report',async (req,res) => {
             const data = req.body;
-
             // console.log(user.email);
-            const result = await Categories.insertOne(data);
-
+            const result = await ReportedItems.insertOne(data);
+            console.log(result);
             return res.send(result);
 
         });
+        app.post('/booking',async (req,res) => {
+            const data = req.body;
+            // console.log(user.email);
+            const result = await Bookings.insertOne(data);
+            console.log(result);
+            return res.send(result);
+
+        });
+        app.get('/booking',async (req,res) => {
+            const email = req.query.email;
+            const result = await Bookings.find({}).toArray();
+            return res.send(result);
+        });
+
+        app.post('/add-category',async (req,res) => {
+            const data = req.body;
+            // console.log(user.email);
+            const result = await Categories.insertOne(data);
+            return res.send(result);
+        });
+
         app.post('/add-Product',async (req,res) => {
             const product = req.body;
-
-            // console.log(user.email);
-
-
-
             const result = await Products.insertOne(product);
-
             return res.send(result);
             // console.log(result);
+
+        });
+        app.post('/advertise',async (req,res) => {
+            const product = req.body;
+            const id = product._id;
+            const query = { _id: ObjectId(id) };
+            const productExist = await AdvertisedProducts.find({}).toArray();
+
+            const alreadyAdvertised = productExist.find(product => product._id === id);
+            // console.log(alreadyAdvertised.length);
+            if (alreadyAdvertised) {
+                return res.send({ message: 'Already Advertised' });
+
+            }
+
+            const result = await AdvertisedProducts.insertOne(product);
+            return res.send(result);
+
+        });
+        app.get('/advertise',async (req,res) => {
+            const product = req.body;
+
+            const result = await AdvertisedProducts.find({}).toArray();
+
+
+            return res.send(result);
 
         });
         app.post('/users',async (req,res) => {
@@ -77,7 +120,8 @@ async function run() {
             const query = { email: email };
             const user = await UserList.findOne(query);
             if (user) {
-                const token = jwt.sign({ email },process.env.ACCESS_SECRET_TOKEN,{ expiresIn: '1d' });
+                const token = jwt.sign({ email },process.env.ACCESS_SECRET_TOKEN,{ expiresIn: '7d' });
+                console.log(token);
                 return res.send({ accessToken: token });
             }
         });
@@ -107,9 +151,6 @@ async function run() {
 
             const categories = await Categories.find({}).toArray();
             const category = categories.find(category => category.categoryName === name);
-           
-           
-
 
             const products = await Products.find({}).toArray()
             const catProducts = products.filter(product => product.category === name);
@@ -117,9 +158,15 @@ async function run() {
                 products: catProducts,
                 category: category
             })
-            // console.log(catProducts);
         })
 
+        app.get('/my-products',async (req,res) => {
+            const email = req.query.email;
+
+            const query = { email: email };
+            const products = await Products.find(query).toArray()
+            res.send(products)
+        })
         app.get('/all-categories',async (req,res) => {
 
             const categories = await Categories.find({}).toArray()
@@ -128,13 +175,10 @@ async function run() {
 
         app.get('/allusers',async (req,res) => {
             const email = req.query.email;
-
             const users = await UserList.find({}).toArray()
-
             res.send(users)
-
-
         })
+
         app.get('/allsellers',verifyJWT,async (req,res) => {
             const email = req.query.email;
             const decoded = req.decoded;
@@ -147,6 +191,13 @@ async function run() {
             res.status(403).send({ message: 'Forbidden' })
 
         })
+        app.delete('/my-products/:id',async (req,res) => {
+            const id = req.params.id;
+
+            const query = { _id: ObjectId(id) };
+            const result = await Products.deleteOne(query);
+            res.send(result);
+        })
         app.delete('/allbuyers/:id',async (req,res) => {
             const id = req.params.id;
 
@@ -154,6 +205,7 @@ async function run() {
             const result = await UserList.deleteOne(query);
             res.send(result);
         })
+
         app.delete('/allselllers/:id',async (req,res) => {
             const id = req.params.id;
 
@@ -161,6 +213,7 @@ async function run() {
             const result = await UserList.deleteOne(query);
             res.send(result);
         })
+
         app.patch('/allselllers/:id',async (req,res) => {
             const id = req.params.id;
 
