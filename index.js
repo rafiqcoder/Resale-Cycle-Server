@@ -31,6 +31,7 @@ const verifyJWT = (req,res,next) => {
     })
 }
 
+
 async function run() {
 
     const UserList = client.db('ResaleCycle').collection('userList');
@@ -41,6 +42,17 @@ async function run() {
     const ReportedItems = client.db('ResaleCycle').collection('reportedItems');
     const Payments = client.db('ResaleCycle').collection('payments');
 
+    const verifyAdmin = async (req,res,next) => {
+        const email = req.query.email;
+      
+        const user = await UserList.findOne({ email: email });
+        if (user.role==='admin') {
+           
+            next();
+        } else {
+            return res.status(403).send({ message: 'Forbidden Access' })
+        }
+    }
     try {
         app.get('/admin/:email',verifyJWT,async (req,res) => {
             const { email } = req.params;
@@ -303,7 +315,7 @@ async function run() {
             const result2 = await AdvertisedProducts.deleteOne(query2);
             res.send(result);
         })
-        app.delete('/allbuyers/:id',async (req,res) => {
+        app.delete('/allbuyers/:id',verifyAdmin,async (req,res) => {
             const id = req.params.id;
 
             const query = { _id: ObjectId(id) };
@@ -311,7 +323,7 @@ async function run() {
             res.send(result);
         })
 
-        app.delete('/allselllers/:id',async (req,res) => {
+        app.delete('/allselllers/:id',verifyAdmin,async (req,res) => {
             const id = req.params.id;
 
             const query = { _id: ObjectId(id) };
