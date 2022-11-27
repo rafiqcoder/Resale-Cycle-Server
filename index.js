@@ -9,6 +9,9 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
+const stripe = require("stripe")('sk_test_51M7DjLD0ZYFK3b5MWXs06L7zVdu09MnKM6ihLhmioYefamEJCOFECE4pgGFywF5IeHkTuJV0qJZVrBLCqS9Q6wPD00RoCAKOm9');
+
+app.use(express.static("public"));
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.1rvc7ql.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri,{ useNewUrlParser: true,useUnifiedTopology: true,serverApi: ServerApiVersion.v1 });
@@ -36,8 +39,70 @@ async function run() {
     const AdvertisedProducts = client.db('ResaleCycle').collection('advertised');
     const Bookings = client.db('ResaleCycle').collection('bookings');
     const ReportedItems = client.db('ResaleCycle').collection('reportedItems');
+    const Payments = client.db('ResaleCycle').collection('payments');
 
     try {
+        app.get('/admin/:email',verifyJWT,async (req,res) => {
+            const { email } = req.params;
+
+            const decoded = req.decoded;
+            if (decoded.email === email) {
+                const user = await UserList.findOne({ email: email })
+
+                if (user.role === 'admin') {
+                    return res.send({ message: 'success' })
+                }
+
+                return res.status(403).send({ message: 'forbidden' })
+
+            }
+            res.status(403).send({ message: 'Forbidden' })
+
+        })
+
+        app.post('/payments',async (req,res) => {
+            const data = req.body;
+            const id = data.booking_id;
+            const productId = data.product_id;
+            const booking = await Bookings.updateOne({ _id: ObjectId(id) },{ $set: { status: 'paid' } });
+            const products = await Products.updateOne({ _id: ObjectId(productId) },{ $set: { status: 'paid' } });
+            const advertisedProducts = await AdvertisedProducts.deleteOne({ _id: productId });
+
+            const result = await Payments.insertOne(data);
+            console.log(result);
+            return res.send(result);
+
+        });
+        app.get('/checkout/:id',async (req,res) => {
+            const { id } = req.params;
+            const query = { _id: ObjectId(id) }
+            const result = await Bookings.findOne(query);
+            res.send(result)
+            // console.log(result);
+        })
+
+        app.post("/create-payment-intent",async (req,res) => {
+            const { price } = req.body;
+            console.log(price);
+            // const amount = booking.salePrice;
+            const amount = price * 100;
+            console.log(amount);
+            // Create a PaymentIntent with the order amount and currency
+            const paymentIntent = await stripe.paymentIntents.create({
+                currency: "usd",
+                amount: amount,
+                // automatic_payment_methods: {
+                //     enabled: true,
+                // },
+                "payment_method_types": [
+                    "card"
+                ]
+            });
+
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        });
 
         app.post('/report',async (req,res) => {
             const data = req.body;
@@ -47,17 +112,45 @@ async function run() {
             return res.send(result);
 
         });
+
+        app.get('/report',async (req,res) => {
+            const email = req.query.email;
+            const result = await ReportedItems.find({}).toArray();
+            return res.send(result);
+        });
+        app.delete('/report/:id',async (req,res) => {
+            const id = req.params.id;
+            console.log(id);
+            const query = { _id: id };
+            const result = await ReportedItems.deleteOne(query);
+            console.log(result);
+            res.send(result);
+        })
         app.post('/booking',async (req,res) => {
             const data = req.body;
-            // console.log(user.email);
-            const result = await Bookings.insertOne(data);
-            console.log(result);
-            return res.send(result);
 
+            // console.log(user.email);
+            const id = data.product_id;
+            const query = { buyerEmail: data.buyerEmail,product_id: id };
+            const userBookings = await Bookings.find(query).toArray();
+            if (userBookings.length === 0) {
+
+
+                const result = await Bookings.insertOne(data);
+
+                return res.send(result);
+            }
+
+            return res.status(403).send({ message: 'Already Booked' })
         });
-        app.get('/booking',async (req,res) => {
+        app.get('/booking',verifyJWT,async (req,res) => {
             const email = req.query.email;
-            const result = await Bookings.find({}).toArray();
+            const decoded = req.decoded;
+            if (decoded.email !== email) {
+                return res.status(403).send({ message: 'Forbidden Access' })
+            }
+            const query = { buyerEmail: email };
+            const result = await Bookings.find(query).toArray();
             return res.send(result);
         });
 
@@ -79,28 +172,36 @@ async function run() {
             const product = req.body;
             const id = product._id;
             const query = { _id: ObjectId(id) };
+            const query2 = { _id: id };
             const productExist = await AdvertisedProducts.find({}).toArray();
 
             const alreadyAdvertised = productExist.find(product => product._id === id);
             // console.log(alreadyAdvertised.length);
+
             if (alreadyAdvertised) {
                 return res.send({ message: 'Already Advertised' });
 
             }
-
+            const updateProduct = await Products.updateOne(query,{ $set: { status: 'advertised' } });
             const result = await AdvertisedProducts.insertOne(product);
             return res.send(result);
 
         });
-        app.get('/advertise',async (req,res) => {
+        app.get('/advertise',verifyJWT,async (req,res) => {
             const product = req.body;
-
+            const email = req.query.email;;
+            const decoded = req.decoded;
+            if (decoded.email !== email) {
+                return res.status(403).send({ message: 'Forbidden Access' })
+            }
             const result = await AdvertisedProducts.find({}).toArray();
 
+            // console.log(unsold);
 
             return res.send(result);
 
         });
+
         app.post('/users',async (req,res) => {
             const user = req.body;
             console.log(user);
@@ -154,6 +255,7 @@ async function run() {
 
             const products = await Products.find({}).toArray()
             const catProducts = products.filter(product => product.category === name);
+
             res.send({
                 products: catProducts,
                 category: category
@@ -174,7 +276,7 @@ async function run() {
         })
 
         app.get('/allusers',async (req,res) => {
-            const email = req.query.email;
+            // const email = req.query.email;
             const users = await UserList.find({}).toArray()
             res.send(users)
         })
@@ -195,7 +297,10 @@ async function run() {
             const id = req.params.id;
 
             const query = { _id: ObjectId(id) };
+            const query2 = { _id: id };
+            console.log(query2);
             const result = await Products.deleteOne(query);
+            const result2 = await AdvertisedProducts.deleteOne(query2);
             res.send(result);
         })
         app.delete('/allbuyers/:id',async (req,res) => {
