@@ -9,7 +9,7 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
-const stripe = require("stripe")('sk_test_51M7DjLD0ZYFK3b5MWXs06L7zVdu09MnKM6ihLhmioYefamEJCOFECE4pgGFywF5IeHkTuJV0qJZVrBLCqS9Q6wPD00RoCAKOm9');
+const stripe = require("stripe")(`${process.env.STRIPE_SECRET_KEY}`);
 
 app.use(express.static("public"));
 
@@ -44,10 +44,10 @@ async function run() {
 
     const verifyAdmin = async (req,res,next) => {
         const email = req.query.email;
-      
+
         const user = await UserList.findOne({ email: email });
-        if (user.role==='admin') {
-           
+        if (user.role === 'admin') {
+
             next();
         } else {
             return res.status(403).send({ message: 'Forbidden Access' })
@@ -180,11 +180,16 @@ async function run() {
             // console.log(result);
 
         });
-        app.post('/advertise',async (req,res) => {
+        app.post('/advertise',verifyJWT,async (req,res) => {
             const product = req.body;
+            const email = req.query.email;
+            const decoded = req.decoded;
             const id = product._id;
             const query = { _id: ObjectId(id) };
             const query2 = { _id: id };
+            if (decoded.email !== email) {
+                return res.status(403).send({ message: 'Forbidden Access' })
+            }
             const productExist = await AdvertisedProducts.find({}).toArray();
 
             const alreadyAdvertised = productExist.find(product => product._id === id);
@@ -199,13 +204,10 @@ async function run() {
             return res.send(result);
 
         });
-        app.get('/advertise',verifyJWT,async (req,res) => {
+        app.get('/advertise',async (req,res) => {
             const product = req.body;
-            const email = req.query.email;;
-            const decoded = req.decoded;
-            if (decoded.email !== email) {
-                return res.status(403).send({ message: 'Forbidden Access' })
-            }
+
+
             const result = await AdvertisedProducts.find({}).toArray();
 
             // console.log(unsold);
@@ -265,8 +267,9 @@ async function run() {
             const categories = await Categories.find({}).toArray();
             const category = categories.find(category => category.categoryName === name);
 
-            const products = await Products.find({}).toArray()
-            const catProducts = products.filter(product => product.category === name);
+
+            const products = await Products.find({}).toArray();
+            const catProducts = products.filter(product => product.category === name && product.status !== 'paid');
 
             res.send({
                 products: catProducts,
